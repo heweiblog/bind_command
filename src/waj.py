@@ -24,7 +24,7 @@ app = Flask(__name__)
 def waj_dnsCommandAck(uuid, orgId, subsysId, hashMode, compressMode, encryptMode):
 	sleep(1)
 	try:
-		url                 = waj_conf['upload']['url']+'41/'+waj_conf['upload']['org_id']
+		url                 = waj_conf['upload']['url']+'41/' + orgId
 		randVal             = bytes(''.join(random.sample(string.ascii_letters, 20)), 'utf-8')
 		lPwd                = bytes(waj_conf['security']['user_pwd'], 'utf-8')
 		lMsgAuthKey         = bytes(waj_conf['security']['data_pwd'], 'utf-8')
@@ -213,145 +213,332 @@ def waj_clear_cache(intfId, requestData, orgId, subsysId, uuid, encryptMode, has
 	return json.dumps(gen_waj_Result('1'))
 
 
+def get_switch_target_file(link_file):
+	d1,d2='',''
+	with open(link_file,'r') as f:
+		d1 = f.read()
+	if link_file == switch:
+		with open(std,'r') as f:
+			d2 = f.read()
+		if d1 == d2:
+			return std
+		return local
+	elif link_file == root_source:
+		with open(standard_source,'r') as f:
+			d2 = f.read()
+		if d1 == d2:
+			return standard_source
+		return exigency_source
+	elif link_file == yrdns_switch:
+		with open(yrdns_std,'r') as f:
+			d2 = f.read()
+		if d1 == d2:
+			return yrdns_std
+		return yrdns_local
+
 
 def waj_root_switch(intfId, requestData, orgId, subsysId, uuid, encryptMode, hashMode, compressMode):
 	target,switch_file = '',''
+	
+	try:
+		jsonData        = json.loads(requestData.decode("utf-8"))
 
-	if intfId == '15' or intfId == '18':
-		if soft == 'bind':
-			target = local
-			switch_file = switch
-		elif soft == 'yrdns':
-			target = yrdns_local
-			switch_file = yrdns_switch
-	elif intfId == '16' or intfId == '17':
-		if soft == 'bind':
-			target = std
-			switch_file = switch
-		elif soft == 'yrdns':
-			target = yrdns_std
-			switch_file = yrdns_switch
-	elif intfId == '34':
-		target = exigency_source
-		switch_file = root_source
-	elif intfId == '35':
-		target = standard_source
-		switch_file = root_source
+		if intfId == '15':
+			if soft == 'bind':
+				target = local
+				switch_file = switch
+				waj_command_cache[uuid] = get_switch_target_file(switch)
+			elif soft == 'yrdns':
+				target = yrdns_local
+				switch_file = yrdns_switch
+				waj_command_cache[uuid] = get_switch_target_file(yrdns_switch)
+		elif intfId == '16':
+			cancelCmdUuid = jsonData.get('cancelCmdUuid')
+			if soft == 'bind':
+				target = waj_command_cache[uuid] if cancelCmdUuid in waj_command_cache else std
+				switch_file = switch
+			elif soft == 'yrdns':
+				target = waj_command_cache[uuid] if cancelCmdUuid in waj_command_cache else yrdns_std
+				switch_file = yrdns_switch
+			del waj_command_cache[cancelCmdUuid]
+		elif intfId == '17':
+			if soft == 'bind':
+				target = std
+				switch_file = switch
+				waj_command_cache[uuid] = get_switch_target_file(switch)
+			elif soft == 'yrdns':
+				target = yrdns_std
+				switch_file = yrdns_switch
+				waj_command_cache[uuid] = get_switch_target_file(yrdns_switch)
+		elif intfId == '18':
+			cancelCmdUuid = jsonData.get('cancelCmdUuid')
+			if soft == 'bind':
+				target = waj_command_cache[uuid] if cancelCmdUuid in waj_command_cache else local
+				switch_file = switch
+			elif soft == 'yrdns':
+				target = waj_command_cache[uuid] if cancelCmdUuid in waj_command_cache else yrdns_local
+				switch_file = yrdns_switch
+			del waj_command_cache[cancelCmdUuid]
+		elif intfId == '34':
+			switch_file = root_source
+			waj_command_cache[uuid] = get_switch_target_file(root_source)
+			source = jsonData.get('dataSource')
+			if source == '1':
+				target = standard_source
+			elif source == '2':
+				target = exigency_source
+		elif intfId == '35':
+			cancelCmdUuid = jsonData.get('cancelCmdUuid')
+			target = waj_command_cache[uuid] if cancelCmdUuid in waj_command_cache else standard_source
+			switch_file = root_source
+			del waj_command_cache[cancelCmdUuid]
 
-	if server_type == 'root_copy':
-		is_exigency = True if exigency_source == target else False
-		if check_root_copy_data_source(is_exigency):
-			logger.info('root copy data source already at {}'.format(target))
+		if server_type == 'root_copy':
+			is_exigency = True if exigency_source == target else False
+			if check_root_copy_data_source(is_exigency):
+				logger.info('root copy data source already at {}'.format(target))
+				return json.dumps(gen_waj_Result('0',uuid, orgId, subsysId, hashMode, compressMode, encryptMode))
+		if switch_named_file(target,switch_file,'0'):
 			return json.dumps(gen_waj_Result('0',uuid, orgId, subsysId, hashMode, compressMode, encryptMode))
-	if switch_named_file(target,switch_file,'0'):
-		return json.dumps(gen_waj_Result('0',uuid, orgId, subsysId, hashMode, compressMode, encryptMode))
+	
+	except Exception as e:
+		logger.error('root switch error : {}'.format(e))
+
 	return json.dumps(gen_waj_Result('1'))
 
 
-def include_forward_file():
-	forward_str = 'include ' + '"' + forward_file + '";\n'
+def include_file(fname):
+	f_str = 'include ' + '"' + fname + '";\n'
 	try:
 		with open(conf_file,'r') as f:
 			for s in f:
-				if s == forward_str:
+				if s == f_str:
 					return True
 		with open(conf_file,'a') as f:
 			f.write('\n')
-			f.write(forward_str)
+			f.write(f_str)
 		return True
 	except Exception as e:
-		logger.error('include forward file to named conf error: {}'.format(e))
+		logger.error('include file to named conf error: {}'.format(e))
 	return False
 	
 
-def include_foward_zone(data,fname,forward_str):
+def include_zone(data,fname,zone_str,zone_file):
 	try:
 		with open(fname,'w') as f:
 			f.write(data)
-		if os.path.exists(forward_file) == False:
-			with open(forward_file,'w') as f:
-				f.write(forward_str)
+		if os.path.exists(zone_file) == False:
+			with open(zone_file,'w') as f:
+				f.write(zone_str)
 			return True
-		with open(forward_file,'r+') as f:
+		with open(zone_file,'r+') as f:
 			for s in f:
-				if forward_str == s:
+				if zone_str == s:
 					return True
-			f.write(forward_str)
+			f.write(zone_str)
 		return True
 	except Exception as e:
-		logger.error('include forward file to named conf error: {}'.format(e))
+		logger.error('include zone file to named conf error: {}'.format(e))
 	return False
 		
 
 def reload_bind_conf():
 	try:
 		subprocess.check_call([rndc, 'reload'], cwd = '/etc')
+		subprocess.check_call([rndc, 'flush'], cwd = '/etc')
 	except Exception as e:
 		logger.error('do rndc reload error: {}'.format(e))
 		return False
 	return True
 
 
+def del_force_zone(include_file,include_str):
+	try:
+		if os.path.exists(include_file) == False:
+			return False
+		l = []
+		with open(include_file,'r') as f:
+			l = f.readlines()
+		with open(include_file,'w') as f:
+			for s in l:
+				if include_str == s:
+					continue
+				f.write(s)
+		return reload_bind_conf()
+	except Exception as e:
+		logger.warning('del ns force file error: '+str(e))
+	return False
+
+
 def conf_zone_forward(domain, mode, ipv4_list, ipv6_list):
-	if include_forward_file() == False:
+	if include_file(forward_file) == False:
 		return False
 
 	d1 = 'zone "{}" IN '.format(domain) + '{\n    type forward;\n'
 	forward_mode = 'first' if mode == '1' else 'only'
 	iplist = '{ '
 	for ip in ipv4_list:
-		iplist += ip + ';'
+		if ip != '':
+			iplist += ip + ';'
 	for ip in ipv6_list:
-		iplist += ip + ';'
+		if ip != '':
+			iplist += ip + ';'
 	iplist += ' }'
 	d2 = '    forward {};\n    forwarders {};\n'.format(forward_mode,iplist)+ '};'
 	data = d1 + d2
 	
-	fname = '/var/drms_toggle_data/' + domain + '.forward'
+	fname = '/var/drms_toggle_data/' + domain + 'forward'
 	forward_str = 'include ' + '"' + fname  + '";\n'
-	if include_foward_zone(data,fname,forward_str) == False:
+	if include_zone(data,fname,forward_str,forward_file) == False:
 		return False
 
 	return reload_bind_conf()
 
 
 def del_zone_forward(domain):
-	fname = '/var/drms_toggle_data/' + domain + '.forward'
+	fname = '/var/drms_toggle_data/' + domain + 'forward'
 	forward_str = 'include ' + '"' + fname  + '";\n'
+	if os.path.exists(fname):
+		os.remove(fname)
+	return del_force_zone(forward_file,forward_str)
+
+
+def get_ns_str(nslist):
+	ns_str = ''
 	try:
-		if os.path.exists(forward_file) == False:
-			return False
-		l = []
-		with open(forward_file,'r') as f:
-			l = f.readlines()
-		with open(forward_file,'w') as f:
-			for s in l:
-				if forward_str == s:
-					continue
-				f.write(s)
-		return reload_bind_conf()
+		for d in nslist:
+			for i in d['ipv4List']:
+				if i != '':
+					ns_str += i + ';'
+			for i in d['ipv6List']:
+				if i != '':
+					ns_str += i + ';'
+		return ns_str
 	except Exception as e:
-		logger.error('del forward zone from forward file error: {}'.format(e))
-	return False
+		logger.error('get ns list str error: {}'.format(e))
+	return ''
 
 
-def waj_zone_forward(intfId, requestData, orgId, subsysId, uuid, encryptMode, hashMode, compressMode):
+def ns_force_resolve(domain,domainType,nslist):
+	if include_file(ns_file) == False:
+		return False
+
+	ns_str = get_ns_str(nslist)
+
+	d1 = 'zone "%s" IN '%(domain) + '{\n    type forward;\n'
+	d2 = '    forward first;\n    forwarders { %s };\n};'%(ns_str)
+	data = d1 + d2
+	
+	fname = '/var/drms_toggle_data/' + domain + 'ns'
+	forward_str = 'include ' + '"' + fname  + '";\n'
+	if include_zone(data,fname,forward_str,ns_file) == False:
+		return False
+
+	return reload_bind_conf()
+
+
+def cancel_ns_force_resolve(domain):
+	fname = '/var/drms_toggle_data/' + domain + 'ns'
+	f_str = 'include ' + '"' + fname  + '";\n'
+	if os.path.exists(fname):
+		os.remove(fname)
+	return del_force_zone(ns_file,f_str)
+
+
+def cname_force_resolve(domain,domainType,cname):
+	if include_file(cname_file) == False:
+		return False
+	
+	dname = ''
+	if domain[-1:] == '.':
+		dname = domain
+	else:
+		dname = domain + '.'
+	domain = domain.split('.',1)[1]
+
+	if cname[-1:] != '.':
+		cname = cname + '.'
+
+	data = 'zone "' + domain + '" IN {\n    type master;\n    file "/var/drms_toggle_data/' + domain + 'cname.zone";\n};'
+	fname = '/var/drms_toggle_data/' + domain + 'cname'
+	cname_str = 'include ' + '"' + fname  + '";\n'
+	
+	if include_zone(data,fname,cname_str,cname_file) == False:
+		return False
+
+	zone_file = '/var/drms_toggle_data/' + domain + 'cname.zone'
+	soa =  '$TTL 600\n@ IN SOA ns.%s admin.%s (%s 2H 4M 1W 2D)\n'%(domain,domain,time.strftime('%Y%m%d%H'))
+	ns = ' IN NS ns\nns IN A 114.114.114.114\n'
+	zone_data = soa + ns + dname + ' IN CNAME ' + cname + '\n'
+
+	with open(zone_file,'w') as f:
+		f.write(zone_data)
+
+	return reload_bind_conf()
+
+
+def cancel_cname_force_resolve(domain):
+	domain = domain.split('.',1)[1]
+	fname = '/var/drms_toggle_data/' + domain + 'cname'
+	f_str = 'include ' + '"' + fname  + '";\n'
+	if os.path.exists(fname):
+		os.remove(fname)
+	zname = '/var/drms_toggle_data/' + domain + 'cname.zone'
+	if os.path.exists(zname):
+		os.remove(zname)
+	return del_force_zone(cname_file,f_str)
+
+
+def waj_force_resolve(intfId, requestData, orgId, subsysId, uuid, encryptMode, hashMode, compressMode):
 	try:
 		jsonData        = json.loads(requestData.decode("utf-8"))
-		domain          = jsonData.get('domain')
-		domainType      = jsonData.get('domainType')
-		ipv4List      	= jsonData.get('ipv4List')
-		ipv6List      	= jsonData.get('ipv6List')
-		forwardMode		= jsonData.get('forwardMode')
 
-		if intfId == '25' and conf_zone_forward(domain,forwardMode, ipv4List, ipv6List):
-			return json.dumps(gen_waj_Result('0',uuid, orgId, subsysId, hashMode, compressMode, encryptMode))
-		elif intfId == '26' and del_zone_forward(domain):
-			return json.dumps(gen_waj_Result('0',uuid, orgId, subsysId, hashMode, compressMode, encryptMode))
-
+		if intfId == '21':
+			domain = jsonData.get('domain')
+			domainType = jsonData.get('domainType')
+			nslist = jsonData.get('paraList')
+			if ns_force_resolve(domain,domainType,nslist):
+				waj_command_cache[uuid] = domain
+				return json.dumps(gen_waj_Result('0',uuid, orgId, subsysId, hashMode, compressMode, encryptMode))
+		elif intfId == '22':
+			cancelCmdUuid = jsonData.get('cancelCmdUuid')
+			if cancelCmdUuid in waj_command_cache and cancel_ns_force_resolve(waj_command_cache[cancelCmdUuid]):
+				del waj_command_cache[cancelCmdUuid]
+				return json.dumps(gen_waj_Result('0',uuid, orgId, subsysId, hashMode, compressMode, encryptMode))
+		elif intfId == '23':
+			domain = jsonData.get('domain')
+			domainType = jsonData.get('domainType')
+			cname = jsonData.get('cname')
+			if cname_force_resolve(domain,domainType,cname):
+				waj_command_cache[uuid] = domain
+				return json.dumps(gen_waj_Result('0',uuid, orgId, subsysId, hashMode, compressMode, encryptMode))
+		elif intfId == '24':
+			cancelCmdUuid = jsonData.get('cancelCmdUuid')
+			if cancelCmdUuid in waj_command_cache and cancel_cname_force_resolve(waj_command_cache[cancelCmdUuid]):
+				del waj_command_cache[cancelCmdUuid]
+				return json.dumps(gen_waj_Result('0',uuid, orgId, subsysId, hashMode, compressMode, encryptMode))
+		elif intfId == '25':
+			domain          = jsonData.get('domain')
+			domainType      = jsonData.get('domainType')
+			ipv4List      	= jsonData.get('ipv4List')
+			ipv6List      	= jsonData.get('ipv6List')
+			forwardMode		= jsonData.get('forwardMode')
+			if conf_zone_forward(domain,forwardMode, ipv4List, ipv6List):
+				waj_command_cache[uuid] = domain
+				return json.dumps(gen_waj_Result('0',uuid, orgId, subsysId, hashMode, compressMode, encryptMode))
+		elif intfId == '26':
+			cancelCmdUuid = jsonData.get('cancelCmdUuid')
+			if cancelCmdUuid in waj_command_cache and del_zone_forward(waj_command_cache[cancelCmdUuid]):
+				del waj_command_cache[cancelCmdUuid]
+				return json.dumps(gen_waj_Result('0',uuid, orgId, subsysId, hashMode, compressMode, encryptMode))
 	except Exception as e:
-		logger.error('zone forward error: {}'.format(e))
+		logger.error('force resolve error: {}'.format(e))
 	return json.dumps(gen_waj_Result('1'))
+
+
+
+def control_dnssec(intfId, requestData, orgId, subsysId, uuid, encryptMode, hashMode, compressMode):
+	return json.dumps(gen_waj_Result('0',uuid, orgId, subsysId, hashMode, compressMode, encryptMode))
 
 
 #flask 处理https的入口函数
@@ -360,7 +547,6 @@ def handerHttpsRequest(intfId, orgId):
 	try:
 		if request.method == 'POST':
 			jsonData = json.loads(request.get_data().decode('utf-8'))			
-			logger.info('local 0.0.0.0:18899 HttpsRequest recv {}'.format(jsonData))            
             #获取请求参数里面的对应值            
 			uuid            = jsonData.get('uuid')            
 			orgId           = jsonData.get('orgId')            
@@ -386,11 +572,17 @@ def handerHttpsRequest(intfId, orgId):
 				logger.error('waj Check data failure')                
 				return json.dumps(gen_waj_Result('3'))
 
+			logger.info('recv waj cmd {}'.format(requestData))
 			command_func = {
 				'29' : waj_clear_cache,
-				'15' : waj_root_switch,'16' : waj_root_switch,'17' : waj_root_switch,'18' : waj_root_switch,
-				'34' : waj_root_switch,'35' : waj_root_switch,
-				'25' : waj_zone_forward,'26' : waj_zone_forward
+				'15' : waj_root_switch, '16' : waj_root_switch,
+				'17' : waj_root_switch, '18' : waj_root_switch,
+				'34' : waj_root_switch, '35' : waj_root_switch,
+				'21' : waj_force_resolve, '22' : waj_force_resolve,
+				'23' : waj_force_resolve, '24' : waj_force_resolve,
+				'25' : waj_force_resolve, '26' : waj_force_resolve,
+				'30' : control_dnssec,'31' : control_dnssec,
+				'32' : control_dnssec,'33' : control_dnssec
 			}
 
 			if intfId in command_func:

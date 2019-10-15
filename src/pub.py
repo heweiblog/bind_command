@@ -28,8 +28,11 @@ try:
 
 	soft = config.get('dns', 'soft')
 
+	work_dir = config.get('bind', 'dir')
 	conf_file = config.get('bind', 'conf_file')
-	forward_file = '/var/drms_toggle_data/forward.zone'
+	forward_file = '/var/drms_toggle_data/forward.force'
+	ns_file = '/var/drms_toggle_data/ns.force'
+	cname_file = '/var/drms_toggle_data/cname.force'
 	rndc = config.get('bind', 'rndc')
 	switch = config.get('bind', 'switch')
 	std = config.get('bind', 'std')
@@ -60,6 +63,7 @@ try:
 	loop_count = 0
 	share_delay = multiprocessing.Value('d', 86400)
 
+	waj_command_cache = {}
 	waj_conf = {}
 	network = {}
 	network['ip'] = config.get('local-net', 'ip')
@@ -70,7 +74,7 @@ try:
 	
 	upload = {}
 	upload['url'] = config.get('upload', 'url')
-	upload['org_id'] = config.get('upload', 'org_id')
+	upload['data_tag'] = config.get('upload', 'data_tag')
 	waj_conf['upload'] = upload
 
 	security = {}

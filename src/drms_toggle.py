@@ -139,6 +139,8 @@ def check_soa_and_upload():
 					upload_root_run_data(now_soa)
 				if loop_count  >= 900 and int(share_delay.value) == 900:
 					upload_root_run_data(now_soa)
+			else:
+				logger.warning('dns server can not work please check')
 		if loop_count >= 900:
 			loop_count = 0
 		sleep(1)
@@ -158,7 +160,5 @@ class DrmsToggle(Daemon):
  
 
 if __name__ == '__main__':
-	drms_toggle = DrmsToggle('/tmp/drms_toggle.pid')
+	drms_toggle = DrmsToggle('/var/drms_toggle_data/drms_toggle.pid')
 	drms_toggle.start()
-
-

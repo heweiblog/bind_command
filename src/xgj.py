@@ -195,7 +195,7 @@ def upload_switch_result(target, dnsId, commandId):
 	if target == std or target == yrdns_std:
 		switch_data += '|1|' + time.strftime('%Y-%m-%d %H:%M:%S') + '||' + time.strftime('%Y-%m-%d %H:%M:%S')
 	elif target == local or target == yrdns_local:
-		switch_data += '|2|' + time.strftime('%Y-%m-%d %H:%M:%S') + '|' + time.strftime('%Y-%m-%d %H:%M:%S') + '|'
+		switch_data += '|1|' + time.strftime('%Y-%m-%d %H:%M:%S') + '|' + time.strftime('%Y-%m-%d %H:%M:%S') + '|'
 	elif target == standard_source:
 		switch_data += '|1|' + time.strftime('%Y-%m-%d %H:%M:%S') + '||' 
 	elif target == exigency_source:

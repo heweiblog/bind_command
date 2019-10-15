@@ -24,6 +24,7 @@ rpmclean:
 	rm -rf build dist
 	rm -rf drms_toggle-$(APPVER)
 	rm -rf drms_toggle.spec
+	rm -rf src/__pycache__/
 	cp -r ~/rpmbuild/RPMS/x86_64/$(TGT)*$(APPVER)* ./  
 	rm -rf ~/rpmbuild/SOURCES/$(TGT)* \
 	~/rpmbuild/BUILD/$(TGT)* \
@@ -41,8 +42,10 @@ distclean:
 	rm -rf build dist
 	rm -rf drms_toggle-$(APPVER)
 	rm -rf drms_toggle.spec
+	rm -rf src/__pycache__/
 
 clean:
 	rm -rf build dist
 	rm -rf drms_toggle-$(APPVER)
 	rm -rf drms_toggle.spec
+	rm -rf src/__pycache__/

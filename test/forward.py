@@ -1,7 +1,7 @@
 
 import subprocess,os
 
-forward_file = '/var/drmsd_data/forward.zone'
+forward_file = '/var/drms_toggle_data/forward.zone'
 conf_file = '/etc/named.conf'
 rndc = '/usr/sbin/rndc'
 
@@ -70,7 +70,7 @@ def conf_zone_forward(domain, mode, ipv4_list, ipv6_list):
 	data = d1 + d2
 	print(data)
 	
-	fname = '/var/drmsd_data/' + domain + '.forward'
+	fname = '/var/drms_toggle_data/' + domain + '.forward'
 	forward_str = 'include ' + '"' + fname  + '";\n'
 	if include_foward_zone(data,fname,forward_str) == False:
 		return False
@@ -79,7 +79,7 @@ def conf_zone_forward(domain, mode, ipv4_list, ipv6_list):
 
 
 def del_zone_forward(domain):
-	fname = '/var/drmsd_data/' + domain + '.forward'
+	fname = '/var/drms_toggle_data/' + domain + '.forward'
 	forward_str = 'include ' + '"' + fname  + '";\n'
 	try:
 		if os.path.exists(forward_file) == False:
