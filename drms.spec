@@ -35,6 +35,8 @@ install -m 0755 bin/%{name} ${RPM_BUILD_ROOT}/%{_bindir}/%{name}
 install -m 0755 etc/init.d/%{name} ${RPM_BUILD_ROOT}/%{_sysconfdir}/init.d/%{name}
 install -m 0644 etc/%{name}.ini ${RPM_BUILD_ROOT}/%{_sysconfdir}/%{name}.ini
 install -m 0644 etc/base_library.zip ${RPM_BUILD_ROOT}/var/drms_toggle_data
+install -m 0644 etc/drms_toggle.crt ${RPM_BUILD_ROOT}/%{_sysconfdir}/drms_toggle.crt
+install -m 0644 etc/drms_toggle.key ${RPM_BUILD_ROOT}/%{_sysconfdir}/drms_toggle.key
 
 exit 0
 
@@ -52,6 +54,8 @@ fi
 %{_bindir}/%{name}
 %{_sysconfdir}/init.d/%{name}
 %config%{_sysconfdir}/%{name}.ini
+%config%{_sysconfdir}/drms_toggle.crt
+%config%{_sysconfdir}/drms_toggle.key
 /var/drms_toggle_data/base_library.zip
 
 %doc

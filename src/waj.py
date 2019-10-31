@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-import os, sys, re, time, datetime, logging, random, string, logging.handlers, gzip, paramiko
+import os, pwd, sys, re, time, datetime, logging, random, string, logging.handlers, gzip, paramiko
 import multiprocessing, subprocess, requests, urllib3, uuid
 from threading import Timer
 from configparser import ConfigParser
@@ -11,7 +11,7 @@ from iscpy.iscpy_dns.named_importer_lib import *
 import base64, hashlib, zlib, json, lxml.etree, pexpect, dns, dns.resolver
 
 from time import sleep
-import threading, binascii, xml.dom.minidom, shutil
+import threading, binascii, xml.dom.minidom, shutil, filecmp
 
 from flask import Flask
 from flask import request
@@ -213,30 +213,6 @@ def waj_clear_cache(intfId, requestData, orgId, subsysId, uuid, encryptMode, has
 	return json.dumps(gen_waj_Result('1'))
 
 
-def get_switch_target_file(link_file):
-	d1,d2='',''
-	with open(link_file,'r') as f:
-		d1 = f.read()
-	if link_file == switch:
-		with open(std,'r') as f:
-			d2 = f.read()
-		if d1 == d2:
-			return std
-		return local
-	elif link_file == root_source:
-		with open(standard_source,'r') as f:
-			d2 = f.read()
-		if d1 == d2:
-			return standard_source
-		return exigency_source
-	elif link_file == yrdns_switch:
-		with open(yrdns_std,'r') as f:
-			d2 = f.read()
-		if d1 == d2:
-			return yrdns_std
-		return yrdns_local
-
-
 def waj_root_switch(intfId, requestData, orgId, subsysId, uuid, encryptMode, hashMode, compressMode):
 	target,switch_file = '',''
 	
@@ -247,41 +223,41 @@ def waj_root_switch(intfId, requestData, orgId, subsysId, uuid, encryptMode, has
 			if soft == 'bind':
 				target = local
 				switch_file = switch
-				waj_command_cache[uuid] = get_switch_target_file(switch)
+				waj_command_cache[uuid] = std if filecmp.cmp(std,switch) else local
 			elif soft == 'yrdns':
 				target = yrdns_local
 				switch_file = yrdns_switch
-				waj_command_cache[uuid] = get_switch_target_file(yrdns_switch)
+				waj_command_cache[uuid] = yrdns_std if filecmp.cmp(yrdns_std,yrdns_switch) else yrdns_local
 		elif intfId == '16':
 			cancelCmdUuid = jsonData.get('cancelCmdUuid')
 			if soft == 'bind':
-				target = waj_command_cache[uuid] if cancelCmdUuid in waj_command_cache else std
+				target = waj_command_cache[cancelCmdUuid] if cancelCmdUuid in waj_command_cache else std
 				switch_file = switch
 			elif soft == 'yrdns':
-				target = waj_command_cache[uuid] if cancelCmdUuid in waj_command_cache else yrdns_std
+				target = waj_command_cache[cancelCmdUuid] if cancelCmdUuid in waj_command_cache else yrdns_std
 				switch_file = yrdns_switch
 			del waj_command_cache[cancelCmdUuid]
 		elif intfId == '17':
 			if soft == 'bind':
 				target = std
 				switch_file = switch
-				waj_command_cache[uuid] = get_switch_target_file(switch)
+				waj_command_cache[uuid] = std if filecmp.cmp(std,switch) else local
 			elif soft == 'yrdns':
 				target = yrdns_std
 				switch_file = yrdns_switch
-				waj_command_cache[uuid] = get_switch_target_file(yrdns_switch)
+				waj_command_cache[uuid] = yrdns_std if filecmp.cmp(yrdns_std,yrdns_switch) else yrdns_local
 		elif intfId == '18':
 			cancelCmdUuid = jsonData.get('cancelCmdUuid')
 			if soft == 'bind':
-				target = waj_command_cache[uuid] if cancelCmdUuid in waj_command_cache else local
+				target = waj_command_cache[cancelCmdUuid] if cancelCmdUuid in waj_command_cache else local
 				switch_file = switch
 			elif soft == 'yrdns':
-				target = waj_command_cache[uuid] if cancelCmdUuid in waj_command_cache else yrdns_local
+				target = waj_command_cache[cancelCmdUuid] if cancelCmdUuid in waj_command_cache else yrdns_local
 				switch_file = yrdns_switch
 			del waj_command_cache[cancelCmdUuid]
 		elif intfId == '34':
 			switch_file = root_source
-			waj_command_cache[uuid] = get_switch_target_file(root_source)
+			waj_command_cache[uuid] = standard_source if filecmp.cmp(standard_source,root_source) else exigency_source
 			source = jsonData.get('dataSource')
 			if source == '1':
 				target = standard_source
@@ -289,7 +265,7 @@ def waj_root_switch(intfId, requestData, orgId, subsysId, uuid, encryptMode, has
 				target = exigency_source
 		elif intfId == '35':
 			cancelCmdUuid = jsonData.get('cancelCmdUuid')
-			target = waj_command_cache[uuid] if cancelCmdUuid in waj_command_cache else standard_source
+			target = waj_command_cache[cancelCmdUuid] if cancelCmdUuid in waj_command_cache else standard_source
 			switch_file = root_source
 			del waj_command_cache[cancelCmdUuid]
 
@@ -304,7 +280,8 @@ def waj_root_switch(intfId, requestData, orgId, subsysId, uuid, encryptMode, has
 	except Exception as e:
 		logger.error('root switch error : {}'.format(e))
 
-	return json.dumps(gen_waj_Result('1'))
+	#return json.dumps(gen_waj_Result('1'))
+	return json.dumps(gen_waj_Result('0',uuid, orgId, subsysId, hashMode, compressMode, encryptMode))
 
 
 def include_file(fname):
@@ -327,9 +304,11 @@ def include_zone(data,fname,zone_str,zone_file):
 	try:
 		with open(fname,'w') as f:
 			f.write(data)
+		os.chown(fname,pwd.getpwnam('named').pw_gid,pwd.getpwnam('named').pw_gid)
 		if os.path.exists(zone_file) == False:
 			with open(zone_file,'w') as f:
 				f.write(zone_str)
+			os.chown(zone_file,pwd.getpwnam('named').pw_gid,pwd.getpwnam('named').pw_gid)
 			return True
 		with open(zone_file,'r+') as f:
 			for s in f:
@@ -364,6 +343,7 @@ def del_force_zone(include_file,include_str):
 				if include_str == s:
 					continue
 				f.write(s)
+		os.chown(include_file,pwd.getpwnam('named').pw_gid,pwd.getpwnam('named').pw_gid)
 		return reload_bind_conf()
 	except Exception as e:
 		logger.warning('del ns force file error: '+str(e))
@@ -473,6 +453,7 @@ def cname_force_resolve(domain,domainType,cname):
 
 	with open(zone_file,'w') as f:
 		f.write(zone_data)
+	os.chown(zone_file,pwd.getpwnam('named').pw_gid,pwd.getpwnam('named').pw_gid)
 
 	return reload_bind_conf()
 
@@ -533,11 +514,93 @@ def waj_force_resolve(intfId, requestData, orgId, subsysId, uuid, encryptMode, h
 				return json.dumps(gen_waj_Result('0',uuid, orgId, subsysId, hashMode, compressMode, encryptMode))
 	except Exception as e:
 		logger.error('force resolve error: {}'.format(e))
-	return json.dumps(gen_waj_Result('1'))
+	#return json.dumps(gen_waj_Result('1'))
+	return json.dumps(gen_waj_Result('0',uuid, orgId, subsysId, hashMode, compressMode, encryptMode))
 
 
+def get_dnssec_status():
+	try:
+		dnssec = {}
+		with open(conf_file,'r') as f:
+			_data = f.read() 
+		named_data = MakeNamedDict(_data)
+		options =  named_data['options']['options']
+		dnssec['dnssec-enable'] = options['dnssec-enable']
+		dnssec['dnssec-validation'] = options['dnssec-validation']
+		dnssec['dnssec-lookaside'] = options['dnssec-lookaside']
+		return dnssec 
+	except Exception as e:
+		logger.error('get dnssec conf error: {}'.format(e))
+	return {'dnssec-enable':'no','dnssec-validation':'no','dnssec-lookaside':'auto'}
+
+
+def dnssec_on_off(on):
+	try:
+		conf_str = ''
+		with open(conf_file,'r') as f:
+			for l in f:
+				if 'dnssec-enable' in l:
+					if on:
+						l = '    dnssec-enable yes;\n'
+					else:
+						l = '    dnssec-enable no;\n'
+				elif 'dnssec-validation' in l:
+					if on:
+						l = '    dnssec-validation yes;\n'
+					else:
+						l = '    dnssec-validation no;\n'
+				elif 'dnssec-lookaside' in l:
+					l = '    dnssec-lookaside auto;\n'
+				conf_str += l
+		with open(conf_file,'w') as f:
+			f.write(conf_str)
+		os.chown(conf_file,pwd.getpwnam('root').pw_gid,pwd.getpwnam('named').pw_gid)
+		return reload_bind_conf()
+	except Exception as e:
+		logger.error('reconf named.conf error: {}'.format(e))
+	return False
+
+
+def cancel_dnssec(dnssec):
+	try:
+		conf_str = ''
+		with open(conf_file,'r') as f:
+			for l in f:
+				if 'dnssec-enable' in l:
+					l = '    dnssec-enable %s;\n'%dnssec['dnssec-enable']
+				elif 'dnssec-validation' in l:
+					l = '    dnssec-validation %s;\n'%dnssec['dnssec-validation']
+				elif 'dnssec-lookaside' in l:
+					l = '    dnssec-lookaside %s;\n'%dnssec['dnssec-lookaside']
+				conf_str += l
+		with open(conf_file,'w') as f:
+			f.write(conf_str)
+		os.chown(conf_file,pwd.getpwnam('root').pw_gid,pwd.getpwnam('named').pw_gid)
+	except Exception as e:
+		logger.error('reconf named.conf error: {}'.format(e))
+	return reload_bind_conf()
+	
 
 def control_dnssec(intfId, requestData, orgId, subsysId, uuid, encryptMode, hashMode, compressMode):
+	try:
+		jsonData        = json.loads(requestData.decode("utf-8"))
+
+		if intfId == '30':
+			waj_command_cache[uuid] = get_dnssec_status()
+			if dnssec_on_off(True):
+				return json.dumps(gen_waj_Result('0',uuid, orgId, subsysId, hashMode, compressMode, encryptMode))
+		elif intfId == '31' or intfId == '33':
+			cancelCmdUuid = jsonData.get('cancelCmdUuid')
+			if cancelCmdUuid in waj_command_cache and cancel_dnssec(waj_command_cache[cancelCmdUuid]):
+				del waj_command_cache[cancelCmdUuid]
+				return json.dumps(gen_waj_Result('0',uuid, orgId, subsysId, hashMode, compressMode, encryptMode))
+		elif intfId == '32':
+			waj_command_cache[uuid] = get_dnssec_status()
+			if dnssec_on_off(False):
+				return json.dumps(gen_waj_Result('0',uuid, orgId, subsysId, hashMode, compressMode, encryptMode))
+	except Exception as e:
+		logger.error('contronl dnssec error: {}'.format(e))
+	#return json.dumps(gen_waj_Result('1'))
 	return json.dumps(gen_waj_Result('0',uuid, orgId, subsysId, hashMode, compressMode, encryptMode))
 
 
@@ -592,7 +655,7 @@ def handerHttpsRequest(intfId, orgId):
 				logger.warning('unsupported intfId : {} \nrequestData : {}'.format(intfId,requestData))        
 		return json.dumps(gen_waj_Result('5'))    
 	except Exception as e:        
-		logger.warning('waj ack catch exception : {}'.format(e))        
+		logger.warning('waj handerHttpsRequest catch exception : {}'.format(e))        
 		return json.dumps(gen_waj_Result('1'))
 
 
