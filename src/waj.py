@@ -527,7 +527,6 @@ def get_dnssec_status():
 		options =  named_data['options']['options']
 		dnssec['dnssec-enable'] = options['dnssec-enable']
 		dnssec['dnssec-validation'] = options['dnssec-validation']
-		dnssec['dnssec-lookaside'] = options['dnssec-lookaside']
 		return dnssec 
 	except Exception as e:
 		logger.error('get dnssec conf error: {}'.format(e))
@@ -549,8 +548,6 @@ def dnssec_on_off(on):
 						l = '    dnssec-validation yes;\n'
 					else:
 						l = '    dnssec-validation no;\n'
-				elif 'dnssec-lookaside' in l:
-					l = '    dnssec-lookaside auto;\n'
 				conf_str += l
 		with open(conf_file,'w') as f:
 			f.write(conf_str)
@@ -570,8 +567,6 @@ def cancel_dnssec(dnssec):
 					l = '    dnssec-enable %s;\n'%dnssec['dnssec-enable']
 				elif 'dnssec-validation' in l:
 					l = '    dnssec-validation %s;\n'%dnssec['dnssec-validation']
-				elif 'dnssec-lookaside' in l:
-					l = '    dnssec-lookaside %s;\n'%dnssec['dnssec-lookaside']
 				conf_str += l
 		with open(conf_file,'w') as f:
 			f.write(conf_str)
@@ -600,7 +595,6 @@ def control_dnssec(intfId, requestData, orgId, subsysId, uuid, encryptMode, hash
 				return json.dumps(gen_waj_Result('0',uuid, orgId, subsysId, hashMode, compressMode, encryptMode))
 	except Exception as e:
 		logger.error('contronl dnssec error: {}'.format(e))
-	#return json.dumps(gen_waj_Result('1'))
 	return json.dumps(gen_waj_Result('0',uuid, orgId, subsysId, hashMode, compressMode, encryptMode))
 
 
